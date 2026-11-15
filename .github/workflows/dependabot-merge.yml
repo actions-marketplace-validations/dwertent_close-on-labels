@@ -1,0 +1,87 @@
+name: Merge Dependabot security updates
+
+# Once a week, merges open Dependabot pull requests whose checks all passed.
+#
+# This repository has no Dependabot version updates configured, so every
+# Dependabot pull request is a security update. If you add version updates in
+# .github/dependabot.yml, this workflow will merge those too.
+#
+# Branch protection on main is the real gate: GitHub refuses the merge unless
+# the required checks passed. The check below only decides which pull requests
+# to try, and reports why the others were skipped.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+concurrency:
+  group: dependabot-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BASE: ${{ github.event.repository.default_branch }}
+      # Job names that must have passed. Keep in sync with the required checks on main.
+      REQUIRED_CHECKS: test e2e
+    steps:
+      - name: Merge pull requests with passing checks
+        run: |
+          set -uo pipefail
+          merged=0 skipped=0 failed=0
+          note() { echo "$1"; echo "- $1" >> "$GITHUB_STEP_SUMMARY"; }
+
+          prs=$(gh pr list --author "app/dependabot" --base "$BASE" --state open --limit 100 \
+            --json number,title,headRefOid,isDraft) || { echo "::error::Could not list pull requests"; exit 1; }
+          count=$(jq length <<< "$prs")
+          echo "Found $count open Dependabot pull request(s)"
+          echo "### Dependabot security updates ($count open)" >> "$GITHUB_STEP_SUMMARY"
+
+          while read -r pr; do
+            [[ -n "$pr" ]] || continue
+            number=$(jq -r .number <<< "$pr")
+            sha=$(jq -r .headRefOid <<< "$pr")
+            title=$(jq -r .title <<< "$pr")
+
+            if [[ $(jq -r .isDraft <<< "$pr") == "true" ]]; then
+              note "#$number skipped: draft ($title)"; skipped=$((skipped + 1)); continue
+            fi
+
+            # gh exits non-zero when checks are failing or pending; the JSON is still printed.
+            checks=$(gh pr checks "$number" --json name,bucket 2> /dev/null) || true
+            [[ -n "$checks" ]] || checks="[]"
+
+            not_passed=$(jq -r '[.[] | select(.bucket != "pass" and .bucket != "skipping") | "\(.name) (\(.bucket))"] | join(", ")' <<< "$checks")
+            if [[ -n "$not_passed" ]]; then
+              note "#$number skipped: checks not passed: $not_passed ($title)"; skipped=$((skipped + 1)); continue
+            fi
+
+            missing=""
+            for name in $REQUIRED_CHECKS; do
+              jq -e --arg name "$name" 'any(.[]; .name == $name and .bucket == "pass")' <<< "$checks" > /dev/null || missing+=" $name"
+            done
+            if [[ -n "$missing" ]]; then
+              note "#$number skipped: required checks did not run:$missing ($title)"; skipped=$((skipped + 1)); continue
+            fi
+
+            # --match-head-commit: refuse if the branch moved after the checks were read.
+            if output=$(gh pr merge "$number" --squash --match-head-commit "$sha" 2>&1); then
+              note "#$number merged ($title)"; merged=$((merged + 1))
+            else
+              echo "$output"
+              note "#$number NOT merged, GitHub refused: $(tail -n 1 <<< "$output") ($title)"; failed=$((failed + 1))
+            fi
+          done < <(jq -c '.[]' <<< "$prs")
+
+          echo "Merged $merged, skipped $skipped, refused $failed"
+          ((failed == 0))

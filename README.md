@@ -159,6 +159,16 @@ The project tests itself in three ways:
 
 Each E2E run leaves its closed `[e2e]` issues and pull request behind.
 
+## Branch protection and dependency updates
+
+`main` requires the `test` (CI) and `e2e` (E2E) checks to pass. This applies to
+administrators too, so every change goes through a pull request.
+
+[dependabot-merge.yml](.github/workflows/dependabot-merge.yml) runs every Monday
+and merges open Dependabot security updates whose checks all passed. An update
+to a bundled dependency fails the `dist/` check until someone rebuilds `dist/`
+on the pull request, so it stays open.
+
 ## Releasing
 
 Push a tag like `v1.2.3`. [release.yml](.github/workflows/release.yml) moves `v1` to it.
