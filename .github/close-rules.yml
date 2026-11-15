@@ -1,0 +1,6 @@
+# Rules this repository applies to itself (see .github/workflows/dogfood.yml).
+rules:
+  - name: rejected
+    when: (wontfix OR invalid OR duplicate) AND NOT keep-open
+    reason: not_planned
+    comment: "Closing because this was labeled {{matched}}."

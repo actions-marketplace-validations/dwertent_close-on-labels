@@ -1,0 +1,25 @@
+name: Close on labels
+
+# This repository uses its own action, from the default branch, on its own
+# issues and pull requests.
+
+on:
+  issues:
+    types: [labeled]
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      # On pull_request_target this checks out the base branch, never the PR's code.
+      - uses: actions/checkout@v5
+      - uses: ./
+        with:
+          rules-file: .github/close-rules.yml

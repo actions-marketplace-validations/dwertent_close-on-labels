@@ -1,0 +1,150 @@
+name: E2E
+
+# Runs the action from this checkout (uses: ./) against real issues and a real
+# pull request in this repository, then checks what GitHub says happened.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # create and delete the throwaway PR branch
+  issues: write
+  pull-requests: write
+
+jobs:
+  e2e:
+    # Pull requests from forks get a read-only token.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create fixtures
+        id: fx
+        run: ./e2e/setup.sh
+
+      - name: "Case: OR, one label present"
+        id: or_hit
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.or_hit }}
+          labels: e2e-a, e2e-b
+          comment: "e2e: rule {{rule}} matched {{matched}}"
+
+      - name: "Case: AND, one label missing"
+        id: and_miss
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.and_miss }}
+          labels: e2e-a, e2e-b
+          operator: AND
+
+      - name: "Case: AND, all labels present"
+        id: and_hit
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.and_hit }}
+          labels: |
+            e2e-a
+            e2e-b
+          operator: AND
+          close-reason: completed
+
+      - name: "Case: expression blocked by NOT"
+        id: not_blocked
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.not_blocked }}
+          expression: (e2e-a OR e2e-b) AND NOT e2e-keep
+
+      - name: "Case: expression matches"
+        id: expr_hit
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.expr_hit }}
+          expression: (e2e-a OR e2e-b) AND NOT e2e-keep
+          lock: true
+
+      - name: "Case: rules file"
+        id: file_rule
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.file_rule }}
+          rules-file: e2e/rules.yml
+
+      - name: "Case: dry-run"
+        id: dry_run
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.dry_run }}
+          labels: e2e-a
+          comment: "e2e: this comment must not be posted"
+          dry-run: true
+
+      - name: "Case: issue with target prs"
+        id: wrong_target
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.wrong_target }}
+          labels: e2e-a
+          target: prs
+
+      - name: "Case: no labels"
+        id: no_match
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.no_match }}
+          labels: e2e-a, e2e-b
+
+      - name: "Case: pull request"
+        id: pr
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.pr }}
+          labels: e2e-a
+          target: prs
+
+      - name: "Case: invalid expression fails the step"
+        id: bad_expr
+        continue-on-error: true
+        uses: ./
+        with:
+          number: ${{ steps.fx.outputs.no_match }}
+          expression: e2e-a OR
+
+      - name: Assert
+        env:
+          N_OR_HIT: ${{ steps.fx.outputs.or_hit }}
+          N_AND_MISS: ${{ steps.fx.outputs.and_miss }}
+          N_AND_HIT: ${{ steps.fx.outputs.and_hit }}
+          N_NOT_BLOCKED: ${{ steps.fx.outputs.not_blocked }}
+          N_EXPR_HIT: ${{ steps.fx.outputs.expr_hit }}
+          N_FILE_RULE: ${{ steps.fx.outputs.file_rule }}
+          N_DRY_RUN: ${{ steps.fx.outputs.dry_run }}
+          N_WRONG_TARGET: ${{ steps.fx.outputs.wrong_target }}
+          N_NO_MATCH: ${{ steps.fx.outputs.no_match }}
+          N_PR: ${{ steps.fx.outputs.pr }}
+          OUT_OR_HIT: ${{ toJSON(steps.or_hit.outputs) }}
+          OUT_AND_MISS: ${{ toJSON(steps.and_miss.outputs) }}
+          OUT_AND_HIT: ${{ toJSON(steps.and_hit.outputs) }}
+          OUT_NOT_BLOCKED: ${{ toJSON(steps.not_blocked.outputs) }}
+          OUT_EXPR_HIT: ${{ toJSON(steps.expr_hit.outputs) }}
+          OUT_FILE_RULE: ${{ toJSON(steps.file_rule.outputs) }}
+          OUT_DRY_RUN: ${{ toJSON(steps.dry_run.outputs) }}
+          OUT_WRONG_TARGET: ${{ toJSON(steps.wrong_target.outputs) }}
+          OUT_NO_MATCH: ${{ toJSON(steps.no_match.outputs) }}
+          OUT_PR: ${{ toJSON(steps.pr.outputs) }}
+          BAD_EXPR_OUTCOME: ${{ steps.bad_expr.outcome }}
+        run: ./e2e/assert.sh
+
+      - name: Clean up
+        if: always()
+        env:
+          BRANCH: ${{ steps.fx.outputs.branch }}
+        run: ./e2e/cleanup.sh

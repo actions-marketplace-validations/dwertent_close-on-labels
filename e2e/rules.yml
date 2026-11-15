@@ -1,0 +1,15 @@
+# Rules used by the "rules file" case in .github/workflows/e2e.yml.
+rules:
+  - name: needs-keep
+    when: e2e-a AND e2e-b AND e2e-keep
+    comment: "e2e: wrong rule matched"
+
+  - name: both
+    labels: [e2e-a, e2e-b]
+    operator: AND
+    reason: completed
+    comment: "e2e: file rule {{rule}} matched {{matched}}"
+
+  - name: fallback
+    when: e2e-a OR e2e-b
+    comment: "e2e: wrong rule matched"
