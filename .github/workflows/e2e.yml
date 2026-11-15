@@ -16,8 +16,11 @@ permissions:
 
 jobs:
   e2e:
-    # Pull requests from forks get a read-only token.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Pull requests from forks get a read-only token. The throwaway pull request
+    # this workflow opens from an e2e/ branch must not start another e2e run.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'e2e/'))
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

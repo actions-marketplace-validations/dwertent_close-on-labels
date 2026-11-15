@@ -51,7 +51,7 @@ inputs:
     required: false
     default: ""
   token:
-    description: Token used to read labels and close. Needs `issues: write` and `pull-requests: write`.
+    description: "Token used to read labels and close. Needs `issues: write` and `pull-requests: write`."
     required: false
     default: ${{ github.token }}
 

@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   close:
+    if: "!startsWith(github.head_ref, 'e2e/')"
     runs-on: ubuntu-latest
     steps:
       # On pull_request_target this checks out the base branch, never the PR's code.

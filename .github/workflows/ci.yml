@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   test:
+    # The e2e workflow opens a throwaway pull request from an e2e/ branch. Skip it.
+    if: "!startsWith(github.head_ref, 'e2e/')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
