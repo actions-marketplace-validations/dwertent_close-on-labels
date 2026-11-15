@@ -162,3 +162,7 @@ Each E2E run leaves its closed `[e2e]` issues and pull request behind.
 ## Releasing
 
 Push a tag like `v1.2.3`. [release.yml](.github/workflows/release.yml) moves `v1` to it.
+
+## License
+
+[MIT](LICENSE)

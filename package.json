@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "GitHub Action that closes issues and pull requests when their labels match a rule.",
+  "license": "MIT",
   "main": "dist/index.js",
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --target=node24 --format=cjs --legal-comments=none --outfile=dist/index.js",
